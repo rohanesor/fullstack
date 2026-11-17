@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: campusresolve
+      POSTGRES_USER: campusresolve
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env.production}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U campusresolve -d campusresolve"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+  api:
+    build: { context: ., target: api }
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql+psycopg://campusresolve:${POSTGRES_PASSWORD}@db:5432/campusresolve
+      APP_ENV: ${APP_ENV:-production}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      CORS_ORIGINS: ${PUBLIC_ORIGIN}
+      TRUSTED_HOSTS: ${PUBLIC_HOST}
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal]
+  web:
+    build: { context: ., target: web }
+    restart: unless-stopped
+    depends_on: [api]
+    ports: ["80:80", "443:443"]
+    volumes:
+      - /opt/certbot:/etc/letsencrypt:ro
+    networks: [internal]
+networks: { internal: {} }
+volumes: { postgres_data: {} }
